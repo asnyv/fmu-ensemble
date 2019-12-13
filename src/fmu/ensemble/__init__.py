@@ -7,6 +7,7 @@ try:
 except ImportError:
     __version__ = "0.0.0"
 
+from .ensemble import use_concurrent  # noqa
 from .ensemble import ScratchEnsemble  # noqa
 from .realization import ScratchRealization  # noqa
 from .ensembleset import EnsembleSet  # noqa

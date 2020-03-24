@@ -18,8 +18,10 @@ from ecl import EclDataType
 from ecl.eclfile import EclKW
 
 try:
+    # We always try to import concurrent.futures, but
+    # whether it is used depend on common.use_concurrent
     from concurrent.futures import ProcessPoolExecutor
-except (ImportError, ModuleNotFoundError):
+except ImportError:
     pass
 
 from .etc import Interaction
@@ -289,6 +291,9 @@ class ScratchEnsemble(object):
             if runpathfilter and runpathfilter not in row["runpath"]:
                 continue
             logger.info("Adding realization from %s", row["runpath"])
+            # TODO: Must be concurrent. find_files below must be
+            # prepended to the batch runs, but can we have realization
+            # specific arguments to batch jobs?.
             realization = ScratchRealization(
                 row["runpath"],
                 index=int(row["index"]),
@@ -333,8 +338,11 @@ class ScratchEnsemble(object):
             realindices = [realindices]
         popped = 0
         for index in realindices:
-            self.realizations.pop(index, None)
-            popped += 1
+            if index in self.realizations.keys():
+                self.realizations.pop(index, None)
+                popped += 1
+            else:
+                logger.warning("Can't remove realization %d, it is not there", index)
         logger.info("removed %d realization(s)", popped)
 
     def to_virtual(self, name=None):
@@ -530,18 +538,6 @@ class ScratchEnsemble(object):
                 }
             ]
         )
-        # for index, realization in self._realizations.items():
-        #    try:
-        #        realization.load_file(localpath, fformat, convert_numeric, force_reread)
-        #    except ValueError:
-        #        # This would at least occur for unsupported fileformat,
-        #        # and that we should not skip.
-        #        logger.critical("load_file() failed in realization %d", index)
-        #        raise ValueError
-        #    except IOError:
-        #        # At ensemble level, we allow files to be missing in
-        #        # some realizations
-        #        logger.warning("Could not read %s for realization %d", localpath, index)
         if self.get_df(localpath).empty:
             raise ValueError("No ensemble data found for {}".format(localpath))
         return self.get_df(localpath)
@@ -697,6 +693,10 @@ class ScratchEnsemble(object):
         """
         dflist = {}
         for index, realization in self.realizations.items():
+            # There is probably no gain from running this concurrently
+            # over the realizations. Each realization object holds
+            # the dataframes in memory already, so retrieval
+            # is at no cost.
             try:
                 data = realization.get_df(localpath, merge=merge)
                 if isinstance(data, dict):
@@ -789,23 +789,6 @@ class ScratchEnsemble(object):
         """
         if not stacked:
             raise NotImplementedError
-#<<<<<<< HEAD
-#        # Future: Multithread this!
-#        for realidx, realization in self.realizations.items():
-#            # We do not store the returned DataFrames here,
-#            # instead we look them up afterwards using get_df()
-#            # Downside is that we have to compute the name of the
-#            # cached object as it is not returned.
-#            logger.info("Loading smry from realization %s", realidx)
-#            realization.load_smry(
-#                time_index=time_index,
-#                column_keys=column_keys,
-#                cache_eclsum=cache_eclsum,
-#                start_date=start_date,
-#                end_date=end_date,
-#                include_restart=include_restart,
-#            )
-#=======
         self.process_batch(
             batch=[
                 {
@@ -821,7 +804,6 @@ class ScratchEnsemble(object):
             ]
         )
 
-#>>>>>>> Forward batch command from ensembles and ensemblesets
         if isinstance(time_index, list):
             time_index = "custom"
         # Note the dependency that the load_smry() function in
@@ -970,8 +952,10 @@ class ScratchEnsemble(object):
             with ProcessPoolExecutor() as executor:
                 real_indices = self.realizations.keys()
                 futures_reals = [
-                    executor.submit(real.process_batch, batch)
-                    for real in self._realizations.values()
+                    executor.submit(
+                        real.process_batch, batch, excepts=(OSError, IOError)
+                    )
+                    for real in self.realizations.values()
                 ]
                 # Reassemble the realization dictionary from
                 # the pickled results of the ProcessPool:
@@ -983,11 +967,12 @@ class ScratchEnsemble(object):
                 }
         else:
             for realization in self.realizations.values():
-                realization.process_batch(batch)
+                realization.process_batch(batch, excepts=(OSError, IOError))
+
         return self
 
     def apply(self, callback, **kwargs):
-        """Callback functionalty, apply a function to every realization
+        """Callback functionality, apply a function to every realization
 
         The supplied function handle will be handed over to
         each underlying realization object. The function supplied
@@ -1009,6 +994,7 @@ class ScratchEnsemble(object):
         """
         results = []
         logger.info("Ensemble %s is running callback %s", self.name, str(callback))
+        # TODO: Must be concurrent
         for realidx, realization in self.realizations.items():
             result = realization.apply(callback, **kwargs).copy()
             # (we took a copy since we are modifying it here:)
@@ -1524,6 +1510,7 @@ class ScratchEnsemble(object):
                     include_restart=include_restart,
                 )
         dflist = []
+        # TODO: Concurrent code
         for index, realization in self.realizations.items():
             dframe = realization.get_smry(
                 time_index=time_index,

@@ -901,6 +901,26 @@ def test_read_eclgrid():
     assert len(grid_df["i"]) == 35840
 
 
+def fipnum2zone():
+    """Helper function for injecting mocked frame into
+   each realization
+
+   This function must be global to the module for
+   concurrent.futures to able to pickle it.
+   """
+    return pd.DataFrame(
+        columns=["FIPNUM", "ZONE"],
+        data=[
+            [1, "UpperReek"],
+            [2, "MidReek"],
+            [3, "LowerReek"],
+            [4, "UpperReek"],
+            [5, "MidReek"],
+            [6, "LowerReek"],
+        ],
+    )
+
+
 def test_get_df():
     """Test the data retrieval functionality
 
@@ -943,21 +963,6 @@ def test_get_df():
     # Inject a mocked dataframe to the realization, there is
     # no "add_data" API for ensembles, but we can use the apply()
     # functionality
-    def fipnum2zone():
-        """Helper function for injecting mocked frame into
-        each realization"""
-        return pd.DataFrame(
-            columns=["FIPNUM", "ZONE"],
-            data=[
-                [1, "UpperReek"],
-                [2, "MidReek"],
-                [3, "LowerReek"],
-                [4, "UpperReek"],
-                [5, "MidReek"],
-                [6, "LowerReek"],
-            ],
-        )
-
     ens.apply(fipnum2zone, localpath="fipnum2zone")
     volframe = ens.get_df("simulator_volume_fipnum", merge="fipnum2zone")
 
@@ -972,6 +977,22 @@ def test_get_df():
     # (this particular data combination does not really make sense)
     assert "STOIIP_OIL" in vol_npv
     assert "npv.txt" in vol_npv
+
+
+# Function to be given to apply() as picklable callback:
+def ex_func1():
+    """Example function that will return a constant dataframe"""
+    return pd.DataFrame(index=["1", "2"], columns=["foo", "bar"], data=[[1, 2], [3, 4]])
+
+
+# Function to be given to apply() as picklable callback
+def rms_vol2df(kwargs):
+    """Example function for bridging with fmu.tools to parse volumetrics"""
+    fullpath = os.path.join(kwargs["realization"].runpath(), kwargs["filename"])
+    # The supplied callback should not fail too easy.
+    if os.path.exists(fullpath):
+        return volumetrics.rmsvolumetrics_txt2df(fullpath)
+    return pd.DataFrame()
 
 
 def test_apply(tmpdir):
@@ -990,12 +1011,6 @@ def test_apply(tmpdir):
 
     ens = ScratchEnsemble("reektest", "realization-*/iter-0")
 
-    def ex_func1():
-        """Example function that will return a constant dataframe"""
-        return pd.DataFrame(
-            index=["1", "2"], columns=["foo", "bar"], data=[[1, 2], [3, 4]]
-        )
-
     result = ens.apply(ex_func1)
     assert isinstance(result, pd.DataFrame)
     assert "REAL" in result.columns
@@ -1012,13 +1027,6 @@ def test_apply(tmpdir):
     # Test if we can wrap the volumetrics-parser in fmu.tools:
     # It cannot be applied directly, as we need to combine the
     # realization's root directory with the relative path coming in:
-    def rms_vol2df(kwargs):
-        """Example function for bridging with fmu.tools to parse volumetrics"""
-        fullpath = os.path.join(kwargs["realization"].runpath(), kwargs["filename"])
-        # The supplied callback should not fail too easy.
-        if os.path.exists(fullpath):
-            return volumetrics.rmsvolumetrics_txt2df(fullpath)
-        return pd.DataFrame()
 
     rmsvols_df = ens.apply(
         rms_vol2df, filename="share/results/volumes/" + "geogrid_vol_oil_1.txt"

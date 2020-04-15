@@ -92,7 +92,7 @@ batch:
     assert not ensset.get_df("unsmry--yearly").empty
 
 
-def sleeper(kwargs):
+def sleeper():
     """Sleeps for one second.
 
         This function must be a module member for it to be
@@ -110,7 +110,7 @@ def test_speedup():
     )
 
     set_concurrent(True)
-    really_concurrent = use_concurrent()
+    # really_concurrent = use_concurrent()
     start_time = datetime.datetime.now()
     ens.process_batch(batch=[{"apply": {"callback": sleeper}}])
     end_time = datetime.datetime.now()

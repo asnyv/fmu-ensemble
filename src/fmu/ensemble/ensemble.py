@@ -992,17 +992,48 @@ class ScratchEnsemble(object):
             pd.DataFrame, aggregated result of the supplied function
             on each realization.
         """
-        results = []
         logger.info("Ensemble %s is running callback %s", self.name, str(callback))
-        # TODO: Must be concurrent
-        for realidx, realization in self.realizations.items():
-            result = realization.apply(callback, **kwargs).copy()
-            # (we took a copy since we are modifying it here:)
-            # Todo: Avoid copy by concatenatint a dict of dataframes
-            # where realization index is the dict keys.
-            result["REAL"] = realidx
-            results.append(result)
-        return pd.concat(results, sort=False, ignore_index=True)
+
+        # It is tempting to just call process_batch() here, but then we
+        # don't know how to collect the results from this particular
+        # apply() operation (if we enforced nonempty localpath, we could)
+        # > kwargs["calllback"] = callback
+        # > ens.process_batch(batch=[{"apply": **kwargs}])  # (untested)
+        if use_concurrent():
+            with ProcessPoolExecutor() as executor:
+                real_indices = self.realizations.keys()
+                kwargs["excepts"] = (OSError, IOError)
+                futures_reals = [
+                    executor.submit(real.apply, callback, **kwargs)
+                    for real in self.realizations.values()
+                ]
+                # Reassemble a list of dataframes from the pickled results
+                # of the ProcessPool:
+                dframes_dict_from_apply = {
+                    r_idx: dframe
+                    for (r_idx, dframe) in zip(
+                        real_indices, [x.result() for x in futures_reals]
+                    )
+                }
+                # If localpath is an argument to the apply function, we not only
+                # need to return the data aggregated, but should also modify
+                # the realization data-dictionary for each member of the ensemble
+                # object.
+                if "localpath" in kwargs:
+                    for realidx, dataframe in dframes_dict_from_apply.items():
+                        self.realizations[realidx].data[kwargs["localpath"]] = dataframe
+                dframes_from_apply = [
+                    dframe.assign(REAL=r_idx)
+                    for (r_idx, dframe) in dframes_dict_from_apply.items()
+                ]
+
+        else:
+            dframes_from_apply = []
+            for realidx, realization in self.realizations.items():
+                dframes_from_apply.append(
+                    realization.apply(callback, **kwargs).assign(REAL=realidx)
+                )
+        return pd.concat(dframes_from_apply, sort=False, ignore_index=True)
 
     def get_smry_dates(
         self,

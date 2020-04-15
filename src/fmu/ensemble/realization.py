@@ -88,10 +88,18 @@ class ScratchRealization(object):
             should be run at time of initialization. Each element is a
             length 1 dictionary with the function name to run as the key
             and each keys value should be the function arguments as a dict.
+        find_files (list of str): Each element in this list will be given
+            to find_files() before any batch commands are processed.
     """
 
     def __init__(
-        self, path, realidxregexp=None, index=None, autodiscovery=True, batch=None
+        self,
+        path,
+        realidxregexp=None,
+        index=None,
+        autodiscovery=True,
+        batch=None,
+        find_files=None,
     ):
         self._origpath = os.path.abspath(path)
         self.index = None
@@ -170,6 +178,10 @@ class ScratchRealization(object):
 
         if os.path.exists(os.path.join(abspath, "parameters.txt")):
             self.load_txt("parameters.txt")
+
+        if find_files is not None:
+            for to_find in find_files:
+                self.find_files(to_find)
 
         if batch:
             self.process_batch(batch)

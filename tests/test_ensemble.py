@@ -774,6 +774,13 @@ def test_ertrunpathfile():
     # because ECLBASE is given in the runpathfile
     assert sum(["UNSMRY" in x for x in ens.files["BASENAME"].unique()]) == 5
 
+    # Run once more to test runpathfilter:
+    ens = ScratchEnsemble(
+        "filtensfromrunpath", runpathfile=testdir + "/data/ert-runpath-file",
+        runpathfilter="realization-3"
+    )
+    assert len(ens) == 1
+    assert ens[3].index == 3
     os.chdir(cwd)
 
 

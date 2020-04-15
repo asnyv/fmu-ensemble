@@ -126,5 +126,6 @@ def test_speedup():
     print("FMU_CONCURRENCY: {}".format(use_concurrent()))
     print("Elapsed time for sequential batch apply sleep: {}".format(seq_elapsed))
 
-    if really_concurrent:
-        assert seq_elapsed > conc_elapsed * 4
+    # Can't enforce this, it depends on physical hardware availability.
+    # if really_concurrent:
+    #    assert seq_elapsed > conc_elapsed * 4

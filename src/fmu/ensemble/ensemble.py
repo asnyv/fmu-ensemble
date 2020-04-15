@@ -73,7 +73,7 @@ class ScratchEnsemble(object):
             the basename of the Eclipse simulation, relative to RUNPATH.
             Fourth column is not used.
         runpathfilter (str): If supplied, the only the runpaths in
-            the runpathfile which contains this string will be included
+            the runpathfile which contain this string will be included
             Use to select only a specific realization f.ex.
         autodiscovery (boolean): True by default, means that the class
             can try to autodiscover data in the realization. Turn
@@ -192,9 +192,12 @@ class ScratchEnsemble(object):
         Args:
             paths (list/str): String or list of strings with wildcards
                 to file system. Absolute or relative paths.
+            realidxregexp (str): Passed on to ScratchRealization init,
+                used to determine index from the path.
             autodiscovery (boolean): whether files can be attempted
                 auto-discovered
-            batch (list): Batch commands sent to each realization.
+            batch (list): Batch commands sent to each realization for
+                immediate execution after initialization.
 
         Returns:
             count (int): Number of realizations successfully added.
@@ -287,24 +290,46 @@ class ScratchEnsemble(object):
             ):
                 raise ValueError("runpath dataframe not correct")
 
-        for _, row in runpath_df.iterrows():
-            if runpathfilter and runpathfilter not in row["runpath"]:
-                continue
-            logger.info("Adding realization from %s", row["runpath"])
-            # TODO: Must be concurrent. find_files below must be
-            # prepended to the batch runs, but can we have realization
-            # specific arguments to batch jobs?.
-            realization = ScratchRealization(
-                row["runpath"],
-                index=int(row["index"]),
-                autodiscovery=False,
-                batch=batch,
+        if runpathfilter:
+            runpath_df = runpath_df[runpath_df["runpath"].str.contains(runpathfilter)]
+
+        if use_concurrent():
+            logger.info(
+                "Loading %s realizations concurrently from runpathfile",
+                str(len(runpath_df)),
             )
-            # Use the ECLBASE from the runpath file to
-            # ensure we recognize the correct UNSMRY file
-            realization.find_files(row["eclbase"] + ".DATA")
-            realization.find_files(row["eclbase"] + ".UNSMRY")
-            self.realizations[int(row["index"])] = realization
+            with ProcessPoolExecutor() as executor:
+                loaded_reals = [
+                    executor.submit(
+                        ScratchRealization,
+                        row["runpath"],
+                        index=int(row["index"]),
+                        autodiscovery=False,
+                        find_files=[
+                            row["eclbase"] + ".DATA",
+                            row["eclbase"] + ".UNSMRY",
+                        ],
+                        batch=batch,
+                    ).result()
+                    for _, row in runpath_df.iterrows()
+                ]
+        else:
+            logger.info(
+                "Loading %s realizations sequentially from runpathfile",
+                str(len(runpath_df)),
+            )
+            loaded_reals = [
+                ScratchRealization(
+                    row["runpath"],
+                    index=int(row["index"]),
+                    autodiscovery=False,
+                    find_files=[row["eclbase"] + ".DATA", row["eclbase"] + ".UNSMRY"],
+                    batch=batch,
+                )
+                for _, row in runpath_df.iterrows()
+            ]
+        for real in loaded_reals:
+            self.realizations[real.index] = real
 
         return len(self) - prelength
 

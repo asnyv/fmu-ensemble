@@ -5,11 +5,15 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import time
+import datetime
 
 import yaml
+import pandas as pd
 
 from fmu.ensemble import etc
 from fmu.ensemble import ScratchEnsemble, EnsembleSet
+from fmu.ensemble.common import use_concurrent, set_concurrent
 
 fmux = etc.Interaction()
 logger = fmux.basiclogger(__name__, level="INFO")
@@ -86,3 +90,41 @@ batch:
     assert "OK" in ensset.keys()
     assert "npv.txt" in ensset.keys()
     assert not ensset.get_df("unsmry--yearly").empty
+
+
+def sleeper(kwargs):
+    """Sleeps for one second.
+
+        This function must be a module member for it to be
+        pickled in concurrent applications"""
+    time.sleep(1)
+    return pd.DataFrame()
+
+
+def test_speedup():
+    """Naive test of speedup in concurrent mode"""
+
+    testdir = os.path.dirname(os.path.abspath(__file__))
+    ens = ScratchEnsemble(
+        "reektest", testdir + "/data/testensemble-reek001/" + "realization-*/iter-0"
+    )
+
+    set_concurrent(True)
+    really_concurrent = use_concurrent()
+    start_time = datetime.datetime.now()
+    ens.process_batch(batch=[{"apply": {"callback": sleeper}}])
+    end_time = datetime.datetime.now()
+    conc_elapsed = (end_time - start_time).total_seconds()
+    print("FMU_CONCURRENCY: {}".format(use_concurrent()))
+    print("Elapsed time for concurrent batch apply sleep: {}".format(conc_elapsed))
+
+    set_concurrent(False)
+    start_time = datetime.datetime.now()
+    ens.process_batch(batch=[{"apply": {"callback": sleeper}}])
+    end_time = datetime.datetime.now()
+    seq_elapsed = (end_time - start_time).total_seconds()
+    print("FMU_CONCURRENCY: {}".format(use_concurrent()))
+    print("Elapsed time for sequential batch apply sleep: {}".format(seq_elapsed))
+
+    if really_concurrent:
+        assert seq_elapsed > conc_elapsed * 4

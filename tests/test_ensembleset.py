@@ -51,6 +51,7 @@ def symlink_iter(origensdir, newitername):
                 fullpathrealizationdir + "/iter-0", realizationdir + "/" + newitername
             )
 
+
 def rms_vol2df(kwargs):
     """Callback function to be sent to ensemble objects"""
     fullpath = os.path.join(kwargs["realization"].runpath(), kwargs["filename"])
@@ -58,6 +59,7 @@ def rms_vol2df(kwargs):
     if os.path.exists(fullpath):
         return volumetrics.rmsvolumetrics_txt2df(fullpath)
     return pd.DataFrame()
+
 
 def test_ensembleset_reek001(tmpdir):
     """Test import of a stripped 5 realization ensemble,

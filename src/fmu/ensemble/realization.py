@@ -32,7 +32,6 @@ from ecl import EclFileFlagEnum
 from .etc import Interaction
 from .virtualrealization import VirtualRealization
 from .realizationcombination import RealizationCombination
-from .common import use_concurrent
 
 HAVE_ECL2DF = False
 try:
@@ -968,6 +967,9 @@ class ScratchRealization(object):
             EclSum: object representing the summary file. None if
                 nothing was found.
         """
+        # pylint: disable=import-outside-toplevel
+        from .common import use_concurrent
+
         if use_concurrent():
             # In concurrent mode, caching is not used as
             # we do not pickle the loaded EclSum objects

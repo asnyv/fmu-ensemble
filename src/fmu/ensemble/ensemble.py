@@ -1565,20 +1565,41 @@ class ScratchEnsemble(object):
                     end_date=end_date,
                     include_restart=include_restart,
                 )
-        dflist = []
-        # TODO: Concurrent code
-        for index, realization in self.realizations.items():
-            dframe = realization.get_smry(
-                time_index=time_index,
-                column_keys=column_keys,
-                cache_eclsum=cache_eclsum,
-                include_restart=include_restart,
-            )
-            dframe.insert(0, "REAL", index)
-            dframe.index.name = "DATE"
-            dflist.append(dframe)
-        if dflist:
-            return pd.concat(dflist, sort=False).reset_index()
+        dframes = []
+        if use_concurrent():
+            with ProcessPoolExecutor() as executor:
+                real_indices = self.realizations.keys()
+                futures_dframes = [
+                    executor.submit(
+                        realization.get_smry,
+                        time_index=time_index,
+                        column_keys=column_keys,
+                        cache_eclsum=cache_eclsum,
+                        include_restart=include_restart,
+                    )
+                    for realization in self.realizations.values()
+                ]
+                # Reassemble a list of dataframes from the pickled results
+                # of the ProcessPool:
+                for realidx, dframe in zip(
+                    real_indices, [x.result() for x in futures_dframes]
+                ):
+                    dframes.append(dframe.assign(REAL=realidx).rename_axis("DATE"))
+        else:
+            # Sequential version:
+            for realidx, realization in self.realizations.items():
+                dframes.append(
+                    realization.get_smry(
+                        time_index=time_index,
+                        column_keys=column_keys,
+                        cache_eclsum=cache_eclsum,
+                        include_restart=include_restart,
+                    )
+                    .assign(REAL=realidx)
+                    .rename_axis("DATE")
+                )
+        if dframes:
+            return pd.concat(dframes, sort=False).reset_index()
         return pd.DataFrame()
 
     def get_eclgrid(self, props, report=0, agg="mean", active_only=False):

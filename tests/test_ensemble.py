@@ -311,8 +311,13 @@ def test_noautodiscovery():
     )
     # Default ensemble construction will include auto-discovery, check
     # that we got that:
-    assert not reekensemble.get_smry(column_keys="FOPT").empty
+    assert not reekensemble.load_smry(column_keys="FOPT").empty
     assert "UNSMRY" in reekensemble.files["FILETYPE"].values
+    # (beware that get_smry() behaves differently depending
+    # on whether it is run concurrently or not, sequential
+    # running of get_smry will lead to UNSMRY being discovered,
+    # while in concurrent mode the realization object where it
+    # is discovered is thrown away)
 
     # Now try again, with no autodiscovery
     reekensemble = ScratchEnsemble(
@@ -776,8 +781,9 @@ def test_ertrunpathfile():
 
     # Run once more to test runpathfilter:
     ens = ScratchEnsemble(
-        "filtensfromrunpath", runpathfile=testdir + "/data/ert-runpath-file",
-        runpathfilter="realization-3"
+        "filtensfromrunpath",
+        runpathfile=testdir + "/data/ert-runpath-file",
+        runpathfilter="realization-3",
     )
     assert len(ens) == 1
     assert ens[3].index == 3

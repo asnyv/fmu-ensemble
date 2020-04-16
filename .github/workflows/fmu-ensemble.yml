@@ -20,7 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        FMU_CONCURRENCY: ['True', 'False']
         python-version: ['2.7', '3.6', '3.7', '3.8']
+        exclude:
+          - python-version: '2.7'
+            FMU_CONCURRENCY: 'True'
 
     steps:
       - name: Checkout commit locally

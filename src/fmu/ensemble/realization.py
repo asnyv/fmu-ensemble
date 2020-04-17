@@ -16,7 +16,7 @@ import re
 import copy
 import glob
 import json
-from datetime import datetime, date, time
+import datetime
 import calendar
 import dateutil
 
@@ -569,12 +569,14 @@ class ScratchRealization(object):
             else:
                 try:
                     hms = list(map(int, jobrow["STARTTIME"].split(":")))
-                    start = datetime.combine(
-                        date.today(), time(hour=hms[0], minute=hms[1], second=hms[2])
+                    start = datetime.datetime.combine(
+                        datetime.date.today(),
+                        datetime.time(hour=hms[0], minute=hms[1], second=hms[2]),
                     )
                     hms = list(map(int, jobrow["ENDTIME"].split(":")))
-                    end = datetime.combine(
-                        date.today(), time(hour=hms[0], minute=hms[1], second=hms[2])
+                    end = datetime.datetime.combine(
+                        datetime.date.today(),
+                        datetime.time(hour=hms[0], minute=hms[1], second=hms[2]),
                     )
                     # This works also when we have crossed 00:00:00.
                     # Jobs > 24 h will be wrong.

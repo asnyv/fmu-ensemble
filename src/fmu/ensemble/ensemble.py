@@ -72,7 +72,7 @@ class ScratchEnsemble(object):
             or relative path to a realization RUNPATH, third column is
             the basename of the Eclipse simulation, relative to RUNPATH.
             Fourth column is not used.
-        runpathfilter (str): If supplied, the only the runpaths in
+        runpathfilter (str): If supplied, only the runpaths in
             the runpathfile which contain this string will be included
             Use to select only a specific realization f.ex.
         autodiscovery (boolean): True by default, means that the class
@@ -302,16 +302,13 @@ class ScratchEnsemble(object):
                 loaded_reals = [
                     executor.submit(
                         ScratchRealization,
-                        row["runpath"],
-                        index=int(row["index"]),
+                        row.runpath,
+                        index=int(row.index),
                         autodiscovery=False,
-                        find_files=[
-                            row["eclbase"] + ".DATA",
-                            row["eclbase"] + ".UNSMRY",
-                        ],
+                        find_files=[row.eclbase + ".DATA", row.eclbase + ".UNSMRY",],
                         batch=batch,
                     ).result()
-                    for _, row in runpath_df.iterrows()
+                    for row in runpath_df.itertuples()
                 ]
         else:
             logger.info(
@@ -320,13 +317,13 @@ class ScratchEnsemble(object):
             )
             loaded_reals = [
                 ScratchRealization(
-                    row["runpath"],
-                    index=int(row["index"]),
+                    row.runpath,
+                    index=int(row.index),
                     autodiscovery=False,
-                    find_files=[row["eclbase"] + ".DATA", row["eclbase"] + ".UNSMRY"],
+                    find_files=[row.eclbase + ".DATA", row.eclbase + ".UNSMRY"],
                     batch=batch,
                 )
-                for _, row in runpath_df.iterrows()
+                for row in runpath_df.itertuples()
             ]
         for real in loaded_reals:
             self.realizations[real.index] = real
@@ -829,10 +826,16 @@ class ScratchEnsemble(object):
             ]
         )
 
+        # process_batch() will modify each Realization object
+        # and add the loaded smry data to the list of internalized
+        # data, under a well-defined name (<dir>/unsmry--<timeindexstr>.csv)
+
+        # Since load_smry() also should return the aggregation
+        # of the loaded smry data, we need to pick up this
+        # data and aggregate it.
+
         if isinstance(time_index, list):
             time_index = "custom"
-        # Note the dependency that the load_smry() function in
-        # ScratchRealization will store to this key-name:
         return self.get_df("share/results/tables/unsmry--" + time_index + ".csv")
 
     def get_volumetric_rates(self, column_keys=None, time_index=None):
@@ -1022,7 +1025,7 @@ class ScratchEnsemble(object):
         # It is tempting to just call process_batch() here, but then we
         # don't know how to collect the results from this particular
         # apply() operation (if we enforced nonempty localpath, we could)
-        # > kwargs["calllback"] = callback
+        # > kwargs["callback"] = callback
         # > ens.process_batch(batch=[{"apply": **kwargs}])  # (untested)
         if use_concurrent():
             with ProcessPoolExecutor() as executor:
@@ -1035,8 +1038,8 @@ class ScratchEnsemble(object):
                 # Reassemble a list of dataframes from the pickled results
                 # of the ProcessPool:
                 dframes_dict_from_apply = {
-                    r_idx: dframe
-                    for (r_idx, dframe) in zip(
+                    realidx: dframe
+                    for (realidx, dframe) in zip(
                         real_indices, [x.result() for x in futures_reals]
                     )
                 }
@@ -1048,16 +1051,15 @@ class ScratchEnsemble(object):
                     for realidx, dataframe in dframes_dict_from_apply.items():
                         self.realizations[realidx].data[kwargs["localpath"]] = dataframe
                 dframes_from_apply = [
-                    dframe.assign(REAL=r_idx)
-                    for (r_idx, dframe) in dframes_dict_from_apply.items()
+                    dframe.assign(REAL=realidx)
+                    for (realidx, dframe) in dframes_dict_from_apply.items()
                 ]
 
         else:
-            dframes_from_apply = []
-            for realidx, realization in self.realizations.items():
-                dframes_from_apply.append(
-                    realization.apply(callback, **kwargs).assign(REAL=realidx)
-                )
+            dframes_from_apply = [
+                realization.apply(callback, **kwargs).assign(REAL=realidx)
+                for (realidx, realization) in self.realizations.items()
+            ]
         return pd.concat(dframes_from_apply, sort=False, ignore_index=True)
 
     def get_smry_dates(
@@ -1569,6 +1571,9 @@ class ScratchEnsemble(object):
         if use_concurrent():
             with ProcessPoolExecutor() as executor:
                 real_indices = self.realizations.keys()
+                # Note that we cannot use process_batch()
+                # here as we need dataframes in return, not
+                # realizations.
                 futures_dframes = [
                     executor.submit(
                         realization.get_smry,

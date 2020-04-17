@@ -5,7 +5,6 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import datetime
 
 import pytest
 
@@ -94,10 +93,10 @@ def test_webviz_subsurface_testdata_batch():
     """
 
     check_testdata()
-    start_time = datetime.datetime.now()
+    start_time = time.time()
     _do_load_webviz_subsurface_testdata_batch()
-    end_time = datetime.datetime.now()
-    elapsed = (end_time - start_time).total_seconds()
+    end_time = time.time()
+    elapsed = end_time - start_time
     print("FMU_CONCURRENCY: {}".format(use_concurrent()))
     print("Elapsed time for batch ensemble initialization: {}".format(elapsed))
 
@@ -111,9 +110,9 @@ def test_webviz_subsurface_testdata_sequential_batch():
 
     check_testdata()
     set_concurrent(False)
-    start_time = datetime.datetime.now()
+    start_time = time.time()
     _do_load_webviz_subsurface_testdata_batch()
-    end_time = datetime.datetime.now()
-    elapsed = (end_time - start_time).total_seconds()
+    end_time = time.time()
+    elapsed = end_time - start_time
     print("FMU_CONCURRENCY: {}".format(use_concurrent()))
     print("Elapsed time for batch ensemble initialization: {}".format(elapsed))

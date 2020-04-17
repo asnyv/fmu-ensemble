@@ -6,7 +6,6 @@ from __future__ import print_function
 
 import os
 import time
-import datetime
 
 import yaml
 import pandas as pd
@@ -110,22 +109,17 @@ def test_speedup():
     )
 
     set_concurrent(True)
-    # really_concurrent = use_concurrent()
-    start_time = datetime.datetime.now()
+    start_time = time.time()
     ens.process_batch(batch=[{"apply": {"callback": sleeper}}])
-    end_time = datetime.datetime.now()
-    conc_elapsed = (end_time - start_time).total_seconds()
+    end_time = time.time()
+    conc_elapsed = end_time - start_time
     print("FMU_CONCURRENCY: {}".format(use_concurrent()))
     print("Elapsed time for concurrent batch apply sleep: {}".format(conc_elapsed))
 
     set_concurrent(False)
-    start_time = datetime.datetime.now()
+    start_time = time.time()
     ens.process_batch(batch=[{"apply": {"callback": sleeper}}])
-    end_time = datetime.datetime.now()
-    seq_elapsed = (end_time - start_time).total_seconds()
+    end_time = time.time()
+    seq_elapsed = end_time - start_time
     print("FMU_CONCURRENCY: {}".format(use_concurrent()))
     print("Elapsed time for sequential batch apply sleep: {}".format(seq_elapsed))
-
-    # Can't enforce this, it depends on physical hardware availability.
-    # if really_concurrent:
-    #    assert seq_elapsed > conc_elapsed * 4
